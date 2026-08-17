@@ -304,6 +304,53 @@ one recorded settlement.
 
 ---
 
+## Making a change
+
+Most changes need nothing but a push. The exceptions are worth knowing, because
+none of them fail loudly.
+
+| Changed | Do this |
+| --- | --- |
+| UI or logic — `app/`, `components/`, `lib/` | `npm run typecheck && npm test`, commit, push. Cloudflare rebuilds on its own. |
+| Colour tokens — `lib/theme.ts` | Same. The contrast tests gate it: every foreground clears 4.5:1 on its own background **in both palettes**, and both palettes must define identical token sets. |
+| Logo — `assets/logo.png` | `node scripts/make-icons.mjs` first, then commit the six regenerated icons alongside it. |
+| Database schema | A **new** migration file. Then `npm run bundle:sql`, update `lib/types.ts` by hand, `npx supabase db reset` to prove it applies from scratch, then `npx supabase db push --db-url …` to production. |
+| Edge function — `supabase/functions/` | `npx supabase functions deploy sync-fx-rates --project-ref <ref>`. **A git push does not deploy this.** |
+| Dependencies | Commit `package-lock.json`. Cloudflare installs from it with `npm ci`, which fails if it has drifted from `package.json`. |
+| Supabase URL or key | Three places: `.env.local` (dev), `.env.production.local` (local production build), and the Cloudflare Pages environment. |
+
+CI runs typecheck and the test suite on every push to `main`. Cloudflare deploys
+whether or not it passes, so treat a red run as "the deployed app is broken",
+not "the deploy was stopped".
+
+### Four things that go wrong quietly
+
+- **`lib/types.ts` is hand-written**, mirroring the SQL. Nothing regenerates it
+  and nothing fails when it drifts from the schema — the types simply start
+  describing a database that no longer exists.
+- **`supabase/apply-all.sql` is a build artifact.** Regenerate it before every
+  apply. It sat two migrations behind once and would have shipped a schema with
+  no `leave_trip` and no `add_member_by_username` while both were live in the UI.
+- **Never edit a migration that has been applied.** `db push` tracks what it ran
+  by filename, so an edited one leaves production and the repo permanently
+  disagreeing with nothing to notice it. Write a new migration instead.
+- **Env values are inlined at bundle time.** `build:web` exports with `--clear`
+  because a warm Metro cache re-emitted a bundle still pointing at `127.0.0.1`
+  after the environment changed: identical bundle hash, wrong backend, no
+  warning. After any env change, check what actually shipped:
+
+  ```bash
+  grep -o 'https://[a-z0-9]*\.supabase\.co' dist/_expo/static/js/web/*.js | sort -u
+  ```
+
+### Missing `.env.local`
+
+`npm test` does not need one — `.env.test` is committed with placeholder values,
+because `lib/supabase.ts` throws at import time without them and several tests
+reach it through `lib/repo/`. Running the app still needs `.env.local`.
+
+---
+
 ## Deploying
 
 Target: the hosted Supabase project for data, **Cloudflare Pages** for the app.

@@ -1,0 +1,31 @@
+{
+  "name": "Splex",
+  "short_name": "Splex",
+  "description": "Split trip expenses across currencies without the arithmetic.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0B0F",
+  "theme_color": "#0A0B0F",
+  "lang": "en",
+  "categories": [
+    "finance",
+    "travel",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

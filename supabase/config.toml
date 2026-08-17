@@ -1,0 +1,40 @@
+project_id = "splex"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+# Logflare log aggregation. Off locally: it is the slowest container to become
+# healthy, it fails its health check often enough on Windows to abort the whole
+# `supabase start`, and nothing in Splex reads it. Hosted projects are
+# unaffected — this file only configures the local stack.
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:8081"
+additional_redirect_urls = ["http://localhost:8081", "http://localhost:8081/**"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+# Turn on for production. Off locally so the seed accounts work immediately.
+enable_confirmations = false
+
+[functions.sync-fx-rates]
+# Cron-invoked and client-invoked; the function checks its own freshness.
+verify_jwt = false

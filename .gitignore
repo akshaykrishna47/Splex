@@ -33,6 +33,12 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Supabase CLI scratch. `.temp/start-secrets/` holds the local stack's service
+# role key, secret key and JWT secret in a plain docker.env — dev defaults, but
+# not something to publish.
+supabase/.temp/
+supabase/.branches/
+
 # typescript
 *.tsbuildinfo
 

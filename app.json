@@ -1,25 +1,54 @@
 {
   "expo": {
-    "name": "_scaffold",
-    "slug": "_scaffold",
-    "version": "1.0.0",
+    "name": "Splex",
+    "slug": "splex",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "scheme": "splex",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0B0F"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "app.splex.client"
     },
     "android": {
+      "package": "app.splex.client",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#0A0B0F"
       },
-      "predictiveBackGestureEnabled": false
+      "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Splex",
+      "shortName": "Splex",
+      "description": "Split trip expenses across currencies without the arithmetic.",
+      "themeColor": "#0A0B0F",
+      "backgroundColor": "#0A0B0F",
+      "display": "standalone",
+      "startUrl": "/",
+      "scope": "/",
+      "lang": "en",
+      "orientation": "portrait"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-web-browser",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
     }
   }
 }

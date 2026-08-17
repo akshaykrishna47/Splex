@@ -104,10 +104,36 @@ async function fetchFallback(): Promise<RateSet> {
   };
 }
 
+/**
+ * The column is numeric(20,10): ten digits of scale leaves ten for the integer
+ * part, so anything at or above 1e10 cannot be stored at all.
+ */
+const MAX_RATE = 1e10;
+
 /** numeric(20,10) — format without scientific notation, which Postgres rejects. */
 function toRateString(value: number): string {
   if (!Number.isFinite(value) || value <= 0) throw new Error(`bad rate ${value}`);
   return value.toFixed(10);
+}
+
+/** Storable at all? See MAX_RATE. */
+function fits(value: number): boolean {
+  return Number.isFinite(value) && value > 0 && value < MAX_RATE;
+}
+
+/**
+ * The codes the app actually offers.
+ *
+ * The feed returns 288 three-letter codes against our 172. The surplus is
+ * defunct units (VEB, VEF, TRL) and crypto that happens to be three letters
+ * (BTT, NFT) — none of it selectable in the app, so none of it worth storing.
+ */
+async function supportedCurrencies(
+  supabase: ReturnType<typeof createClient>,
+): Promise<Set<string>> {
+  const { data, error } = await supabase.from('currencies').select('code');
+  if (error) throw new Error(`could not read currencies: ${error.message}`);
+  return new Set((data ?? []).map((row) => String((row as { code: string }).code)));
 }
 
 type RateRow = {
@@ -177,8 +203,22 @@ Deno.serve(async (req: Request) => {
   const fetchedAt = new Date().toISOString();
   const rows: RateRow[] = [];
 
-  // 1. The pivot rows: USD -> everything.
+  // 1. The pivot rows: USD -> every currency the app offers.
+  //
+  //    Filtered and range-checked, and the range check is the important half.
+  //    A single unstorable value fails the whole upsert, so one defunct
+  //    currency takes every other rate down with it and the app is left with
+  //    nothing — which is exactly what VEB did at 7.7e10 on the first run.
+  const supported = await supportedCurrencies(supabase);
+  const unstorable: string[] = [];
+
   for (const [code, value] of Object.entries(rateSet.rates)) {
+    if (!supported.has(code)) continue;
+    if (!fits(value)) {
+      unstorable.push(code);
+      continue;
+    }
+
     rows.push({
       base_currency: PIVOT,
       quote_currency: code,
@@ -205,10 +245,18 @@ Deno.serve(async (req: Request) => {
       const quoteRate = rateSet.rates[quote];
       if (!quoteRate) continue;
 
+      // Same guard as the pivot rows. A cross-rate divides, so it can exceed
+      // the column even when both of its inputs fit comfortably.
+      const cross = quoteRate / baseRate;
+      if (!fits(cross)) {
+        unstorable.push(`${base}/${quote}`);
+        continue;
+      }
+
       rows.push({
         base_currency: base,
         quote_currency: quote,
-        rate: toRateString(quoteRate / baseRate),
+        rate: toRateString(cross),
         rate_date: rateSet.date,
         source: rateSet.source,
         fetched_at: fetchedAt,
@@ -239,6 +287,9 @@ Deno.serve(async (req: Request) => {
     rate_date: rateSet.date,
     source: rateSet.source,
     used_fallback: usedFallback,
+    // Reported rather than swallowed: a currency turning up here means the app
+    // silently cannot convert it, which is worth noticing before a user does.
+    unstorable: unstorable.length ? unstorable : undefined,
     started_at: startedAt,
   });
 });

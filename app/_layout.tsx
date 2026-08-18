@@ -16,6 +16,7 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { NavBar } from '@/components/NavBar';
 import { installWebFonts } from '@/lib/web-fonts';
 import { installThemeVars } from '@/lib/stores/theme';
+import { installQueryFocus } from '@/lib/query-focus';
 import { ToastProvider } from '@/components/ui/Toast';
 import { useSessionStore } from '@/lib/stores/session';
 import { colors, fontFamily } from '@/lib/theme';
@@ -67,6 +68,10 @@ export default function RootLayout() {
     cachedFor.current = userId;
     queryClient.clear();
   }, [userId]);
+
+  // Bridges AppState into React Query's focus manager, so background polling
+  // stops on a phone and returning to the app refetches. No-op on the web.
+  useEffect(installQueryFocus, []);
 
   // Each weight is a separate font file — React Native does not synthesise bold.
   const [fontsLoaded] = useFonts({

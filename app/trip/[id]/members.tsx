@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
+import { useRefetchOnFocus } from '@/lib/hooks/useRefetchOnFocus';
 import {
   useAddMember,
   useAddMemberByUsername,
@@ -28,6 +29,8 @@ export default function MembersScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const toast = useToast();
   const session = useSessionStore((s) => s.session);
+
+  useRefetchOnFocus();
 
   const trip = useTrip(id);
   const members = useMembers(id);

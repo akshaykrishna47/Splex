@@ -18,6 +18,7 @@ import { Text } from '@/components/ui/Text';
 import { formatDateHeading, groupByDate } from '@/lib/dates';
 import { summarizeForMember } from '@/lib/balances';
 import { useMoney } from '@/lib/hooks/useMoney';
+import { useRefetchOnFocus } from '@/lib/hooks/useRefetchOnFocus';
 import {
   useBalances,
   useExpenses,
@@ -53,6 +54,8 @@ export default function TripFeedScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const session = useSessionStore((s) => s.session);
+
+  useRefetchOnFocus();
 
   const trip = useTrip(id);
   const expenses = useExpenses(id);

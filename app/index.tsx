@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Text } from '@/components/ui/Text';
+import { useRefetchOnFocus } from '@/lib/hooks/useRefetchOnFocus';
 import { useAllBalances, useCurrencies, useMyMemberships, useProfile, useTrips } from '@/lib/queries';
 import { indexCurrencies } from '@/lib/money';
 import { buildDebtSummary } from '@/lib/overview';
@@ -20,6 +21,11 @@ import { spacing } from '@/lib/theme';
 export default function HomeScreen() {
   const router = useRouter();
   const session = useSessionStore((s) => s.session);
+
+  // Tapping "Home" in the nav bar re-reads the trips and balances; the stack
+  // keeps this screen mounted, so nothing else would.
+  useRefetchOnFocus();
+
   const { data: profile } = useProfile(session?.user.id);
   const trips = useTrips();
   const [creating, setCreating] = useState(false);

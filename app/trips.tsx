@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Fab } from '@/components/ui/Fab';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
+import { useRefetchOnFocus } from '@/lib/hooks/useRefetchOnFocus';
 import { useTrips } from '@/lib/queries';
 import { spacing } from '@/lib/theme';
 
@@ -18,6 +19,8 @@ export default function TripsScreen() {
   // The About page's "Create a trip" buttons link here with ?new=1, so the
   // sheet can be opened from elsewhere without duplicating it into every screen.
   const { new: openNew } = useLocalSearchParams<{ new?: string }>();
+
+  useRefetchOnFocus();
 
   const trips = useTrips();
   const [creating, setCreating] = useState(false);

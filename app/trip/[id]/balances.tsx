@@ -19,6 +19,7 @@ import { formatLongDate } from '@/lib/dates';
 import { friendlyError } from '@/lib/errors';
 import { useMoney } from '@/lib/hooks/useMoney';
 import { decimalDigitsFor, parseAmount, toMajorString } from '@/lib/money';
+import { useRefetchOnFocus } from '@/lib/hooks/useRefetchOnFocus';
 import {
   useBalances,
   useMembers,
@@ -34,6 +35,8 @@ import type { MemberBalance, Transfer, Uuid } from '@/lib/types';
 export default function BalancesScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const session = useSessionStore((s) => s.session);
+
+  useRefetchOnFocus();
 
   const trip = useTrip(id);
   const balances = useBalances(id);

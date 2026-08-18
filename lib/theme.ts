@@ -90,6 +90,31 @@ export const PALETTE = {
     /** Sun and moon in the theme toggle. */
     navWarm: '#FFB13D',
     navCool: '#8B7BFF',
+
+    // Category tints. Foreground colours for icons, so they must read on the
+    // surface they sit on — the light set is not a tint of these, it is the
+    // same hues pushed dark enough to be legible on a light background.
+    catFood: '#FFB13D',
+    catLodging: '#C084FC',
+    catTransport: '#4DA3FF',
+    catActivities: '#00E5A0',
+    catShopping: '#FF6B9D',
+    catFlights: '#22D3EE',
+    catTickets: '#FF8A5B',
+    catGroceries: '#A3E635',
+    catOther: '#8A94A6',
+
+    // Avatar tints, picked by a hash of the member's name. Led by the logo's
+    // own hues so avatars read as part of the brand. The initials are drawn in
+    // these, so they are TEXT and take the 4.5:1 bar, not the 3:1 graphics one.
+    avatar1: '#9B8CFF', // lifted from #8B7BFF: 4.45:1 on surfaceRaised, just under AA
+    avatar2: '#52BFFB',
+    avatar3: '#AF71FB',
+    avatar4: '#00E5A0',
+    avatar5: '#FFB13D',
+    avatar6: '#FF6B9D',
+    avatar7: '#22D3EE',
+    avatar8: '#84CC16',
   },
 
   // Built on a five-step steel-blue ramp:
@@ -158,6 +183,32 @@ export const PALETTE = {
     navFillStrong: 'rgba(255, 255, 255, 0.22)',
     navWarm: '#FFE0A8', // 4.77:1
     navCool: '#E6E0FF', // 4.77:1
+
+    // Same hues as the dark set, darkened until each clears 3:1 on both the
+    // page and a white card. The originals measured 1.4-2.9:1 there, which
+    // made mint and lime icons effectively invisible in light mode.
+    catFood: '#A16207', //       4.62:1 on bg
+    catLodging: '#7E22CE', //    6.55:1
+    catTransport: '#1D4ED8', //  6.28:1
+    catActivities: '#0F766E', // 5.13:1
+    catShopping: '#BE185D', //   5.66:1
+    catFlights: '#0E7490', //    5.02:1
+    catTickets: '#C2410C', //    4.86:1
+    catGroceries: '#4D7C0F', //  4.68:1
+    catOther: '#52525B', //      7.25:1
+
+    // Same hues as the dark avatars, darkened until each clears 4.5:1 on every
+    // light surface — white, page, muted and raised. Six of the eight dark
+    // values measured 1.65–2.68:1 on a white card, which made most avatar
+    // initials unreadable in light mode.
+    avatar1: '#5B3FD1', // 5.31:1 worst case
+    avatar2: '#0369A1', // 4.62:1
+    avatar3: '#7E22CE', // 5.44:1
+    avatar4: '#115E59', // 5.90:1
+    avatar5: '#854D0E', // 5.33:1
+    avatar6: '#BE185D', // 4.70:1
+    avatar7: '#155E75', // 5.66:1
+    avatar8: '#3F6212', // 5.51:1
   },
 } as const;
 
@@ -318,16 +369,29 @@ export const fontSize = {
  * category appears it is labelled with its name or emoji, and the spending
  * breakdown encodes magnitude with bar length in a single hue, not with these.
  */
+/**
+ * Tints come from `colors`, not from literals, so they follow the theme.
+ *
+ * These are FOREGROUND colours — icons are drawn in them — and the dark set
+ * measured only 1.4–2.9:1 on a light surface, which left mint and lime icons
+ * effectively invisible in light mode. The `cat*` tokens in PALETTE carry the
+ * measured values for both themes.
+ *
+ * Colour is never the only signal: every category also carries its own icon and
+ * its label. That matters, because nine hues cannot all be told apart under
+ * deuteranopia however they are chosen — the closest pair here sits around 3.5,
+ * well under the 8 you would want if colour had to carry identity alone.
+ */
 export const categoryMeta = {
-  food: { label: 'Food & Drinks', tint: '#FFB13D' },
-  lodging: { label: 'Accommodation', tint: '#C084FC' },
-  transport: { label: 'Transport', tint: '#4DA3FF' },
-  activities: { label: 'Activities', tint: '#00E5A0' },
-  shopping: { label: 'Shopping', tint: '#FF6B9D' },
-  flights: { label: 'Flights', tint: '#22D3EE' },
-  tickets: { label: 'Tickets', tint: '#FF8A5B' },
-  groceries: { label: 'Groceries', tint: '#A3E635' },
-  other: { label: 'Other', tint: '#8A94A6' },
+  food: { label: 'Food & Drinks', tint: colors.catFood },
+  lodging: { label: 'Accommodation', tint: colors.catLodging },
+  transport: { label: 'Transport', tint: colors.catTransport },
+  activities: { label: 'Activities', tint: colors.catActivities },
+  shopping: { label: 'Shopping', tint: colors.catShopping },
+  flights: { label: 'Flights', tint: colors.catFlights },
+  tickets: { label: 'Tickets', tint: colors.catTickets },
+  groceries: { label: 'Groceries', tint: colors.catGroceries },
+  other: { label: 'Other', tint: colors.catOther },
 } as const;
 
 export type CategoryKey = keyof typeof categoryMeta;
@@ -335,8 +399,18 @@ export type CategoryKey = keyof typeof categoryMeta;
 export const CATEGORY_KEYS = Object.keys(categoryMeta) as CategoryKey[];
 
 /** 12% of a hex colour, for chip backgrounds. */
-export function tintBackground(hex: string, alpha = 0.14): string {
-  const value = hex.replace('#', '');
+export function tintBackground(color: string, alpha = 0.14): string {
+  // Category tints arrive as `var(--splex-cat-food)` on web so they can follow
+  // the theme, and parsing that as hex yields `rgba(NaN, NaN, NaN, …)` — an
+  // invalid declaration, which the browser drops, silently taking the chip
+  // background with it. `color-mix` composites the variable without ever
+  // needing its channels. Avatar tints are still literals and take the path
+  // below unchanged.
+  if (color.startsWith('var(')) {
+    return `color-mix(in srgb, ${color} ${Math.round(alpha * 100)}%, transparent)`;
+  }
+
+  const value = color.replace('#', '');
   const r = parseInt(value.slice(0, 2), 16);
   const g = parseInt(value.slice(2, 4), 16);
   const b = parseInt(value.slice(4, 6), 16);
@@ -348,17 +422,18 @@ export function tintBackground(hex: string, alpha = 0.14): string {
  * backgrounds — these are the lighter, higher-chroma end of each hue.
  */
 export function tintFor(seed: string): string {
-  // Led by the logo's own hues — its violet, sky blue and pink-violet — so
-  // avatars read as part of the brand rather than a separate palette.
+  // From `colors`, not literals, so avatars follow the theme. The initials are
+  // drawn in this colour, and the dark values measured 1.65–2.68:1 on a white
+  // card: six of the eight were unreadable in light mode.
   const palette = [
-    '#8B7BFF',
-    '#52BFFB',
-    '#AF71FB',
-    '#00E5A0',
-    '#FFB13D',
-    '#FF6B9D',
-    '#22D3EE',
-    '#84CC16',
+    colors.avatar1,
+    colors.avatar2,
+    colors.avatar3,
+    colors.avatar4,
+    colors.avatar5,
+    colors.avatar6,
+    colors.avatar7,
+    colors.avatar8,
   ];
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {

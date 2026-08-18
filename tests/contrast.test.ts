@@ -96,6 +96,78 @@ describe('both palettes meet AA', () => {
   });
 });
 
+describe('category tints', () => {
+  const CATEGORY_TOKENS = [
+    'catFood',
+    'catLodging',
+    'catTransport',
+    'catActivities',
+    'catShopping',
+    'catFlights',
+    'catTickets',
+    'catGroceries',
+    'catOther',
+  ] as const;
+
+  // Icons are graphics, not body text, so WCAG's non-text bar of 3:1 applies
+  // rather than 4.5:1.
+  const AA_GRAPHICS = 3;
+
+  for (const theme of ['dark', 'light'] as const) {
+    const palette = PALETTE[theme];
+
+    it(`${theme}: every category tint is legible as an icon`, () => {
+      for (const token of CATEGORY_TOKENS) {
+        // Checked against both surfaces a category icon actually appears on:
+        // the page itself, and a card.
+        for (const surface of [palette.bg, palette.surface] as const) {
+          const ratio = contrast(palette[token], surface);
+          expect(ratio, `${theme}.${token} (${palette[token]}) on ${surface}`).toBeGreaterThanOrEqual(
+            AA_GRAPHICS,
+          );
+        }
+      }
+    });
+
+    it(`${theme}: no two categories share a tint`, () => {
+      const values = CATEGORY_TOKENS.map((token) => palette[token]);
+      expect(new Set(values).size).toBe(values.length);
+    });
+  }
+
+  it('avatar tints stay legible on every surface they can land on', () => {
+    const AVATARS = ['avatar1', 'avatar2', 'avatar3', 'avatar4', 'avatar5', 'avatar6', 'avatar7', 'avatar8'] as const;
+
+    for (const theme of ['dark', 'light'] as const) {
+      const palette = PALETTE[theme];
+      const surfaces = [palette.surface, palette.bg, palette.surfaceMuted, palette.surfaceRaised];
+
+      for (const token of AVATARS) {
+        for (const surface of surfaces) {
+          // The initials are drawn in this colour, so it is text: 4.5:1, not
+          // the 3:1 that would apply if it were only a fill.
+          const ratio = contrast(palette[token], surface);
+          expect(ratio, `${theme}.${token} (${palette[token]}) on ${surface}`).toBeGreaterThanOrEqual(
+            AA_NORMAL,
+          );
+        }
+      }
+
+      expect(new Set(AVATARS.map((t) => palette[t])).size, `${theme}: duplicate avatar tint`).toBe(
+        AVATARS.length,
+      );
+    }
+  });
+
+  it('the light set is genuinely different, not the dark one reused', () => {
+    // The bug this guards: the dark tints were used in both themes and measured
+    // 1.4-2.9:1 on a light background, so mint and lime icons vanished.
+    for (const token of CATEGORY_TOKENS) {
+      expect(PALETTE.light[token], token).not.toBe(PALETTE.dark[token]);
+    }
+  });
+});
+
 describe('isLatinOnly', () => {
   it('accepts Latin names including accents', () => {
     for (const name of ['Akshay', 'José', 'Łukasz', "O'Neill", 'Anne-Marie']) {

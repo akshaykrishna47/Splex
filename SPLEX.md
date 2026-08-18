@@ -36,7 +36,10 @@ from React Native primitives.
 | Server state | TanStack Query | `^5.101.4` |
 | Client state | Zustand | `^5.0.15` |
 | Tests | Vitest | `^3.2.7` |
-| Font | Inter, via `expo-font` | — |
+| Icons | Phosphor, on `react-native-svg` | `^3.0.6` / `15.15.4` |
+| Fonts | Inter, Space Grotesk, Lobster | via `@expo-google-fonts/*` |
+| CI | GitHub Actions — typecheck + tests on push | — |
+| Hosting | Cloudflare Pages (static SPA) + hosted Supabase | — |
 
 ### Why each dependency is here
 
@@ -50,8 +53,9 @@ from React Native primitives.
 - `@tanstack/react-query` — caching, refetch-on-focus, and invalidation after writes.
 - `zustand` — two small stores: auth session, and per-device preferences.
 - `@react-native-async-storage/async-storage` — persistence for Zustand and Supabase auth on native. On web it wraps `localStorage`.
-- `expo-font`, `@expo-google-fonts/inter` — Inter, including real tabular numerals.
-- `expo-linking` — builds redirect URLs for magic links and invite links.
+- `expo-font` + `@expo-google-fonts/{inter,space-grotesk,lobster}` — three faces doing three jobs. Inter for body copy and **every numeral**, because Space Grotesk has no tabular figures and a column of amounts drawn in it would not line up. Space Grotesk for headings. Lobster for the greeting name and nothing else.
+- `phosphor-react-native` + `react-native-svg` — the icon set. One library only: `components/ui/Icon.tsx` maps a fixed name list to individual imports, so nothing else in the app reaches for an icon from anywhere else.
+- `expo-linking` — builds redirect URLs for magic links, password recovery and invite links.
 - `expo-constants`, `expo-status-bar`, `expo-web-browser`, `expo-crypto` — Expo baseline.
 
 **Dev**
@@ -77,9 +81,11 @@ app/                       routes (Expo Router)
   _layout.tsx              providers, font loading, auth gate, NavBar
   index.tsx                Home
   trips.tsx                My Trips  (?new=1 opens the create sheet)
-  about.tsx                About
+  about.tsx                About — pinned, scroll-driven sections
   settings.tsx             profile, display currency, sign out
   sign-in.tsx              email/password + magic link
+  forgot-password.tsx      request a recovery link
+  reset-password.tsx       where the recovery link lands
   join/[code].tsx          invite acceptance
   trip/[id]/
     index.tsx              expense feed grouped by date
@@ -88,34 +94,51 @@ app/                       routes (Expo Router)
     expense/new.tsx        ┐ both render <ExpenseForm />
     expense/[expenseId].tsx┘
 
-components/ui/             Button Card Input Sheet Avatar Text Select DateField
-components/                NavBar CreateTripSheet TripCard ExpenseForm
-                           CurrencyPicker DisplayCurrencyToggle FxFooter Screen Logo
+components/ui/             Avatar Button Card ConfirmDialog DateField EmptyState
+                           Fab Icon Input Select Sheet Sparkles Text Toast
+components/                NavBar Screen Logo Greeting ThemeToggle
+                           CreateTripSheet TripCard TripActionsSheet TripSummary
+                           ExpenseForm ExpenseFilterBar RecentActivity DebtSummary
+                           CurrencyPicker DisplayCurrencyToggle FxFooter
 
 lib/
   money.ts                 parsing, formatting, conversion, remainder distribution
   splits.ts                equal / exact / percent / shares
   fx.ts                    rate resolution, ledger pinning, display conversion
   balances.ts              derivation + debt simplification
+  overview.ts              cross-trip debt summary, never summed across currencies
+  trip-insights.ts         totals, filters, activity feed — all derived, none stored
   expense-draft.ts         form state -> write payload, incl. re-pin rules
   dates.ts                 ISO date helpers + calendar grid
-  theme.ts                 design tokens
+  errors.ts                Postgres/PostgREST codes -> sentences a person can act on
+  greeting.ts              first name, truncation, script detection
+  theme.ts                 design tokens, both palettes
   repo/                    ALL Supabase access
   queries.ts               TanStack Query bindings over repo
-  stores/                  session, prefs
+  stores/                  session, prefs, theme
+
+  web-fonts.ts             ┐ web-only. Each injects one <style> and hooks it with
+  web-scroll-fx.ts         │ data-* attributes, because react-native-web has no
+  sparkle-fx.ts            │ className API and StyleSheet cannot express
+  theme-toggle-fx.ts       │ clip-path, @keyframes, sticky, or scroll timelines.
+  theme-transition.ts      ┘ All no-op on native, which keeps its own fallbacks.
 
 scripts/
   bundle-sql.mjs           migrations -> supabase/apply-all.sql
-  finalize-web.mjs         injects PWA tags into the exported index.html
+  finalize-web.mjs         PWA tags + Cloudflare _redirects into the export
   make-icons.mjs           all icon sizes from assets/logo.png
 
 supabase/
-  migrations/              10 files, applied in filename order
+  migrations/              12 files, applied in filename order
   functions/sync-fx-rates/ the only thing that talks to an FX provider
-  seeds/run.ts             dev data, guarded
+  seeds/run.ts             dev data, guarded — seed / seed:reset / seed:clear
+
+.github/workflows/ci.yml   typecheck + tests on every push to main
+types/expo.d.ts            Expo ambient types, so a clean checkout typechecks
+.env.test                  placeholder env, so a clean checkout can run tests
 ```
 
-**53 source files** in `app/` + `components/` + `lib/`. **81 tests**, 5 files.
+**78 source files** in `app/` + `components/` + `lib/`. **146 tests**, 8 files.
 
 ---
 
@@ -343,9 +366,31 @@ foreground → `primaryText`; accent as fill or stroke → `primary`.
 accent, which made "you are owed" indistinguishable from "brand"; now green
 means money and violet means brand.
 
-Inter, with each weight as a separate font file (React Native has no synthetic
-bolding — see `familyForWeight()`), and tabular numerals on the `display` and
-`title` variants so money columns line up.
+### Two palettes, one token layer
+
+There is a light theme, built on a five-step steel-blue ramp
+(`#40677D #5D8FAC #90B2C6 #C2D5E0 #F5F8FA`). Both palettes live in
+`lib/theme.ts` and **both are contrast-tested**: every foreground clears 4.5:1
+on its own background, and the two must define identical token sets, so a token
+added to one and forgotten in the other fails the suite rather than rendering
+transparent.
+
+Switching costs no React render. On web every colour is emitted as a CSS custom
+property, so a theme change is one attribute write on `<html>`; none of the
+StyleSheet call sites know a theme exists. That works because react-native-web
+passes `var(...)` through untouched for colour properties — see its
+`isWebColor`. React Native has no equivalent, so **native is dark-only** until
+the token layer is made reactive.
+
+The nav bar carries its own small palette (`navBg`, `navText`, `navWarm`, …)
+because it is dark in *both* themes: the page text tokens are measured against
+the page and would be invisible on it.
+
+Three faces, three jobs: Space Grotesk for headings, Lobster for the greeting
+name, and Inter for body copy and **every numeral** — Space Grotesk has no
+tabular figures, so a column of amounts drawn in it would not line up. Each
+weight is a separate font file, because React Native has no synthetic bolding
+(see `familyForWeight()`).
 
 Branding is generated: `assets/logo.png` is the single source, and
 `node scripts/make-icons.mjs` produces every favicon, PWA and native icon size.
@@ -379,11 +424,47 @@ re-pin rules on edit.
 
 ---
 
+## Production
+
+| | |
+| --- | --- |
+| Supabase | `tkdkgutkvfwrxtbneffb` — 12 migrations applied, 8 tables all with RLS, 24 policies |
+| FX | `sync-fx-rates` deployed; 163 live rates |
+| Auth | Site URL + redirect allow-list configured for the app origin and `localhost:8081` |
+| Repo | `akshaykrishna47/Splex`, CI green on `main` |
+| Web | Cloudflare Pages — **not connected yet**; `dist/` builds and is verified |
+
+Applying later migrations: `npm run bundle:sql`, then `supabase db push
+--db-url …`. Use `db push` rather than pasting the bundle — it records what it
+ran, so subsequent migrations go up incrementally. Direct connections to
+`db.<ref>.supabase.co` are IPv6-only without the IPv4 add-on.
+
+---
+
 ## Outstanding
 
-- **The hosted project has no schema.** `supabase/apply-all.sql` (regenerate with `npm run bundle:sql`) is ready to paste. It includes a `public.users` backfill for accounts created before the trigger existed.
-- **`apply-all.sql` has never been executed as a single script.** Its 10 migrations are proven via `npx supabase db reset`; the concatenated file is only checked structurally.
-- **`sync-fx-rates` is not deployed.** Rates currently come from the seed script. Deploying it plus the Vault secrets switches to live rates.
-- **Node 21.7.1 is EOL** and outside RN 0.86's supported range. Everything works, but Node 22 LTS would remove the Vitest pin and let static web rendering work.
-- **No automated UI tests.** All 81 tests cover pure logic; the screens are verified by hand and by the end-to-end API check.
-- Out of scope by original design: receipt scanning/OCR, recurring expenses, comments, notifications, native builds, historical-rate backfill, crypto.
+- **Cloudflare Pages is not connected.** Everything else is deployed. Connect
+  the repo with build `npm run build:web`, output `dist`, and set the two
+  `EXPO_PUBLIC_*` variables in the Pages environment.
+- **The FX cron cannot authenticate.** `sync-fx-rates` is deployed and works on
+  demand, but the 6-hourly `pg_cron` job needs two Vault secrets (`project_url`,
+  `service_role_key`) set once in the SQL editor. Until then rates refresh when
+  the client asks, which is the intended degradation.
+- **Email is on Supabase's built-in SMTP**, which allows only a few sends per
+  hour — enough to hit `over_email_send_rate_limit` during testing, let alone
+  with real users. Configure custom SMTP before any volume.
+- **Signup reveals whether an address is registered.** Requested deliberately,
+  and it is email enumeration: anyone can test an address. Password recovery
+  does *not* do this — it answers identically either way.
+- **Category tints are tuned for the dark surface** and reach only 1.4–2.9:1 on
+  a light one, so expense categories are weakly differentiated in light mode.
+  Fixing it means per-theme values in `categoryMeta`.
+- **Native is dark-theme only.** Theming is CSS custom properties, which React
+  Native has no equivalent for. The token layer would have to become reactive.
+- **Node 21.7.1 is EOL** and outside RN 0.86's supported range. Everything
+  works; Node 22 LTS would remove the Vitest pin. CI and Cloudflare both pin 22
+  via `.nvmrc` regardless.
+- **No automated UI tests.** All 146 cover pure logic; screens are verified by
+  hand and by end-to-end API checks.
+- Out of scope by original design: receipt scanning/OCR, recurring expenses,
+  comments, notifications, native builds, historical-rate backfill, crypto.

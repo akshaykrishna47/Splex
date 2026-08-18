@@ -467,9 +467,21 @@ fails loudly if any asset it references is missing.
 
 ## Out of scope for v1
 
-Receipt scanning/OCR (the button is present and visibly disabled), recurring
-expenses, comments, notifications, native builds, historical-rate backfill,
-crypto.
+Receipt scanning/OCR — removed outright, not stubbed, along with the image
+picker it needed. Also: recurring expenses, comments, notifications, native
+builds, historical-rate backfill, crypto.
+
+Known limits worth stating rather than discovering:
+
+- **Native is dark-theme only.** Theming rides on CSS custom properties; React
+  Native has no equivalent, so the token layer would need to become reactive.
+- **Category tints are tuned for the dark surface** and reach only 1.4–2.9:1 on
+  a light background, so categories are weakly differentiated in light mode.
+- **Signup reveals whether an address is already registered.** A deliberate
+  trade for a clear error, and it does mean email enumeration. Password recovery
+  behaves the opposite way and answers identically either way.
+- **Email uses Supabase's built-in SMTP**, which permits only a few sends per
+  hour. Configure custom SMTP before real traffic.
 
 ## Decisions worth knowing about
 

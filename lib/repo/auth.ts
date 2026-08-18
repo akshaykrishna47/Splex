@@ -41,7 +41,7 @@ export const authRepo = {
     password: string,
     displayName: string,
     emailRedirectTo?: string,
-  ): Promise<{ needsConfirmation: boolean }> {
+  ): Promise<{ needsConfirmation: boolean; alreadyRegistered: boolean }> {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -51,8 +51,48 @@ export const authRepo = {
       },
     });
     if (error) throw error;
+
+    // Signing up with an address that already has an account does NOT return
+    // an error. Supabase answers with a decoy user — real-looking id, no
+    // session, and an empty `identities` array — specifically so that signup
+    // cannot be used to discover which addresses are registered. That empty
+    // array is the only signal there is; there is no error code to match on.
+    //
+    // The default (`?? 1`) matters: if a future version stops sending
+    // `identities`, absence must read as "not registered" so a genuine signup
+    // is never mistaken for a duplicate and blocked. Verified against the
+    // hosted project — a real new user comes back with a populated array and
+    // `role: "authenticated"`, the decoy with `[]` and `role: ""`.
+    //
+    // Only CONFIRMED accounts trigger this. Signing up again with an address
+    // that registered but never confirmed re-sends the confirmation instead,
+    // which is the behaviour you want: telling that person "account already
+    // exists" would strand them with no way forward.
+    const alreadyRegistered = (data.user?.identities?.length ?? 1) === 0;
+
     // Supabase returns a user with no session when email confirmation is on.
-    return { needsConfirmation: !data.session };
+    return { needsConfirmation: !data.session, alreadyRegistered };
+  },
+
+  /**
+   * Sends a recovery link. `redirectTo` must be allow-listed in the project's
+   * auth settings or Supabase silently substitutes the Site URL.
+   */
+  async sendPasswordReset(email: string, redirectTo?: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email,
+      redirectTo ? { redirectTo } : undefined,
+    );
+    if (error) throw error;
+  },
+
+  /**
+   * Sets a new password for the current session. The recovery link establishes
+   * that session, which is why this needs no old password.
+   */
+  async updatePassword(password: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
   },
 
   async sendMagicLink(email: string, emailRedirectTo?: string): Promise<void> {

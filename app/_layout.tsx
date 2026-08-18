@@ -106,7 +106,14 @@ function AuthGate() {
     if (!ready) return;
 
     const first = segments[0];
-    const isPublicRoute = first === 'sign-in' || first === 'join';
+    // `reset-password` is public even though arriving there normally means
+    // holding a recovery session: without one it has to be able to say the
+    // link expired, rather than bouncing to sign-in with no explanation.
+    const isPublicRoute =
+      first === 'sign-in' ||
+      first === 'join' ||
+      first === 'forgot-password' ||
+      first === 'reset-password';
 
     if (!session && !isPublicRoute) {
       router.replace('/sign-in');
@@ -144,6 +151,9 @@ function AuthGate() {
         <Stack.Screen name="about" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        {/* Recovery screens carry their own branding, like sign-in does. */}
+        <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
+        <Stack.Screen name="reset-password" options={{ headerShown: false }} />
         <Stack.Screen name="join/[code]" options={{ title: 'Join trip' }} />
         {/* Trip screens keep their own headers: they need a back button. */}
         <Stack.Screen name="trip/[id]" options={{ headerShown: false }} />

@@ -59,13 +59,20 @@ export default function SignInScreen() {
       if (mode === 'sign-in') {
         await authRepo.signInWithPassword(email.trim(), password);
       } else if (mode === 'sign-up') {
-        const { needsConfirmation } = await authRepo.signUpWithPassword(
+        const { needsConfirmation, alreadyRegistered } = await authRepo.signUpWithPassword(
           email.trim(),
           password,
           displayName.trim(),
           redirectTo,
         );
-        if (needsConfirmation) {
+
+        if (alreadyRegistered) {
+          // Switch them to sign-in with the address kept, so the next step is
+          // one click rather than retyping.
+          setMode('sign-in');
+          setPassword('');
+          setError('An account with that email already exists. Sign in below, or reset your password.');
+        } else if (needsConfirmation) {
           // No "then sign in": the confirmation link carries a session, so
           // following it lands straight in the app.
           setNotice('Check your email and confirm your address to finish signing up.');
@@ -166,6 +173,17 @@ export default function SignInScreen() {
             loading={busy}
             fullWidth
           />
+
+          {/* Only while signing in. It is noise on the create-account tab, and
+              on the magic-link tab there is no password to have forgotten. */}
+          {mode === 'sign-in' ? (
+            <Button
+              label="Forgot your password?"
+              variant="ghost"
+              size="sm"
+              onPress={() => router.push('/forgot-password')}
+            />
+          ) : null}
 
           <Button
             label={mode === 'magic-link' ? 'Use a password instead' : 'Email me a magic link instead'}

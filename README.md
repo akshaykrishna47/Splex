@@ -413,12 +413,7 @@ Build command `npm run build:web`, output directory `dist`. Set
 `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the Workers
 environment if building on Cloudflare rather than uploading a local `dist/`.
 
-**SPA routing comes from `wrangler.jsonc`, not from `_redirects`.** This is the
-trap: `scripts/finalize-web.mjs` writes `dist/_redirects` on every build, but
-that is a Cloudflare **Pages** convention and Workers ignores it entirely. The
-first deployment shipped without `not_found_handling` and every URL except `/`
-returned 404 — on refresh, on a shared link, and on the password-recovery link,
-which lands on `/reset-password`.
+**SPA routing comes from `wrangler.jsonc`, and from nothing else:**
 
 ```jsonc
 "assets": {
@@ -429,9 +424,23 @@ which lands on `/reset-password`.
 
 The 200 that setting produces is the point. A 301 or 302 would rewrite the
 address bar, and the router would never see the path it was meant to handle.
+Without it, every URL except `/` returns 404 — on refresh, on a shared link,
+and on the password-recovery link, which lands on `/reset-password`.
 
-`_redirects` is still written, harmlessly, so the build stays correct if this
-ever moves to Pages.
+**Do not add a `_redirects` file.** Workers is not Pages, but it does not
+simply ignore that file either: it *validates* it at deploy time and rejects
+the whole deployment when it is malformed. A `/*  /index.html  200` rule — the
+obvious SPA fallback, and correct on Pages — is refused outright:
+
+```
+Invalid _redirects configuration:
+Line 2: Infinite loop detected in this rule. [code: 100324]
+```
+
+`/*` matches `/index.html` itself, so serving it would re-trigger the same rule.
+The build succeeds and only the deploy fails, which makes it look like a
+Cloudflare problem rather than a repo one. `not_found_handling` already does the
+job, so the file is pure liability here.
 
 ### 4. Auth redirect URLs
 

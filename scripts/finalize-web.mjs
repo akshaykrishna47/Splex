@@ -57,34 +57,30 @@ const HEAD_TAGS = `${MARKER}
 `;
 
 /**
- * SPA routing, for Cloudflare **Pages**.
+ * SPA routing is NOT handled here. It comes from `not_found_handling` in
+ * `wrangler.jsonc`.
  *
- * Expo exports one index.html and does all routing client-side, so a request
- * straight to /trips or /about — a refresh, a shared link, a bookmark — asks
- * the host for a file that does not exist. Without a fallback every route but
- * `/` 404s, and only on reload, which is exactly the kind of bug that survives
- * testing and breaks in front of someone else.
+ * This script used to also emit a `_redirects` file, on the assumption that
+ * Workers would ignore it the way it ignores other Pages conventions. It does
+ * not: Workers validates `_redirects` at deploy time and rejects the whole
+ * deployment if it is malformed. The rule written here was
  *
- * `200` rather than a redirect: the URL has to stay put so the router can read
- * it.
+ *     /*  /index.html  200
  *
- * IMPORTANT: this app is deployed on Cloudflare **Workers**, which does not
- * read `_redirects` at all — that is a Pages convention. Workers gets its
- * fallback from `not_found_handling` in `wrangler.jsonc`, and the first
- * deployment 404'd on every deep link precisely because this file looked like
- * it had the problem covered. Kept anyway: it is correct, it costs nothing, and
- * it is what makes the build right if this ever moves to Pages.
+ * which Cloudflare refuses with "Infinite loop detected in this rule" — `/*`
+ * matches `/index.html` itself, so serving it would re-trigger the same rule.
+ * The build succeeded and the deploy failed, every time.
+ *
+ * Nothing is lost by dropping it. `not_found_handling: "single-page-application"`
+ * already serves index.html with a 200 for unmatched paths, which is the whole
+ * job. If this ever moves to Cloudflare Pages, add a `_redirects` there with a
+ * rule that excludes the fallback target rather than reinstating this one.
  */
-writeFileSync(
-  join(DIST, '_redirects'),
-  ['/_expo/*  /_expo/:splat  200', '/*  /index.html  200', ''].join('\n'),
-  'utf8',
-);
 
 let html = readFileSync(INDEX, 'utf8');
 
 if (html.includes(MARKER)) {
-  console.log('finalize-web: _redirects written; PWA tags already applied.');
+  console.log('finalize-web: already applied, nothing to do.');
   process.exit(0);
 }
 
@@ -107,4 +103,4 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-console.log('finalize-web: PWA tags injected, _redirects written, all referenced assets present.');
+console.log('finalize-web: PWA tags injected, all referenced assets present.');

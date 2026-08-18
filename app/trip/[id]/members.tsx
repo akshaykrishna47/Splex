@@ -6,6 +6,7 @@ import { Screen } from '@/components/Screen';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useToast } from '@/components/ui/Toast';
 import { friendlyError } from '@/lib/errors';
+import { membersRepo } from '@/lib/repo/members';
 import type { TripMember } from '@/lib/types';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -80,12 +81,37 @@ export default function MembersScreen() {
     }
   }
 
+  /**
+   * Adds someone with no Splex account, as a name only.
+   *
+   * First it checks whether what was typed is actually a username, because
+   * that mistake is easy to make and silently harmful: a name-only member
+   * carries no `user_id`, so Row Level Security has nothing to match and the
+   * person never sees the trip — even though they have an account and were
+   * "added". It looks like it worked, from the adder's side.
+   *
+   * When the text does match an account, they are added as that account
+   * instead of being refused. Adding a real user as a name is never what
+   * someone wants, and making them retype it in the other field helps nobody.
+   */
   async function add() {
-    if (!name.trim()) return setError('Enter a name.');
+    const typed = name.trim();
+    if (!typed) return setError('Enter a name.');
     setError(null);
+
     try {
-      await addMember.mutateAsync(name.trim());
-      toast.success(`${name.trim()} added to the trip`);
+      const handle = typed.replace(/^@/, '');
+      const existing = await membersRepo.findByUsername(handle).catch(() => null);
+
+      if (existing) {
+        const member = await addByUsernameMutation.mutateAsync(handle);
+        toast.success(`${member.display_name} added — @${handle} is a Splex account, so they can see the trip`);
+        setName('');
+        return;
+      }
+
+      await addMember.mutateAsync(typed);
+      toast.success(`${typed} added to the trip`);
       setName('');
     } catch (e) {
       const message = friendlyError(e, 'Could not add that person.');

@@ -66,7 +66,9 @@ export default function SignInScreen() {
           redirectTo,
         );
         if (needsConfirmation) {
-          setNotice('Check your email to confirm your address, then sign in.');
+          // No "then sign in": the confirmation link carries a session, so
+          // following it lands straight in the app.
+          setNotice('Check your email and confirm your address to finish signing up.');
         }
       } else {
         await authRepo.sendMagicLink(email.trim(), redirectTo);

@@ -355,15 +355,25 @@ reach it through `lib/repo/`. Running the app still needs `.env.local`.
 
 Target: the hosted Supabase project for data, **Cloudflare Pages** for the app.
 
-### 1. Apply the schema (once, and it is not yet done)
+### 1. Apply the schema
 
-The hosted project answers on `/auth/v1/health` but has no `public` schema —
-every table 404s with `PGRST205`. Paste `supabase/apply-all.sql` into the
-project's SQL editor and run it.
+Done for the current project — all 12 migrations are applied. This is the
+procedure for a new one, or for pushing later migrations.
 
 ```bash
 npm run bundle:sql       # regenerate from supabase/migrations/ first
+npx supabase db push --db-url "postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres"
 ```
+
+Prefer `db push` over pasting `supabase/apply-all.sql`: it records what it ran
+in `supabase_migrations.schema_migrations`, so later migrations go up
+incrementally instead of re-running the whole bundle. The password must be
+percent-encoded — an `@` in it otherwise terminates the userinfo section and
+the host parses as garbage. Use `--dry-run` first.
+
+Direct connections to `db.<ref>.supabase.co` are **IPv6-only** without the IPv4
+add-on. On a network without IPv6, use the Supavisor pooler host from the
+dashboard instead.
 
 **Regenerate before every apply.** The bundle is a build artifact and goes stale
 silently: it sat two migrations behind for a while, which would have shipped a
@@ -407,7 +417,33 @@ routing survives a rebuild. Without it every route but `/` 404s on refresh —
 and only on refresh, which is the kind of bug that passes testing and breaks in
 front of someone else.
 
-### 4. FX rates
+### 4. Auth redirect URLs
+
+Authentication → URL Configuration, or the Management API. Both fields matter:
+
+| Field | Value |
+| --- | --- |
+| Site URL | `https://splex.pages.dev` |
+| Redirect URLs | `https://splex.pages.dev`, `https://splex.pages.dev/**`, `http://localhost:8081`, `http://localhost:8081/**` |
+
+**An empty allow-list does not produce an error.** Supabase silently discards
+the `emailRedirectTo` the app sends and falls back to Site URL — which defaults
+to `http://localhost:3000`, where nothing is listening. The confirmation itself
+still succeeds server-side, so the account really is verified; only the landing
+page 404s. The failure therefore appears in a user's inbox and nowhere a
+developer would look. This shipped that way and was caught only by a user
+clicking the link.
+
+Both the bare origin and the `/**` form are listed because
+`Linking.createURL('/')` strips the trailing slash, so the value actually sent
+has no path at all. The `/**` entries cover `/join/<code>` invite redirects.
+
+To confirm a change took, without sending an email: `POST` to
+`/auth/v1/admin/generate_link` with a `redirect_to` and read `redirect_to` back
+out of the returned `action_link`. If it comes back as Site URL instead of what
+was asked for, the origin is not allow-listed.
+
+### 5. FX rates
 
 A fresh project has **no** `fx_rates` rows, so cross-currency conversion has
 nothing to work with until either the `sync-fx-rates` function is deployed and

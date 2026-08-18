@@ -104,6 +104,99 @@ describe('buildDebtSummary', () => {
     expect(summary.owedToYou[0]?.tripNames).toEqual(['Bangkok', 'Tokyo']);
   });
 
+  it('nets opposing debts with the same person across trips', () => {
+    const summary = buildDebtSummary({
+      trips: [TRIP_A, TRIP_B],
+      balances: [
+        // Trip A: I owe Ben 80.
+        bal('trip-a', ME, -8000, { user_id: MY_ACCOUNT }),
+        bal('trip-a', BEN, 8000, { user_id: BEN_ACCOUNT }),
+        // Trip B: Ben owes me 40.
+        bal('trip-b', 'me-2', 4000, { user_id: MY_ACCOUNT, display_name: 'Me' }),
+        bal('trip-b', 'ben-2', -4000, { user_id: BEN_ACCOUNT, display_name: 'Ben' }),
+      ],
+      myMemberIds: new Set([ME, 'me-2']),
+    });
+
+    // One debt of 40, not "you owe 80" beside "Ben owes you 40".
+    expect(summary.owedToYou).toHaveLength(0);
+    expect(summary.youOwe).toHaveLength(1);
+    expect(summary.youOwe[0]?.amountCents).toBe(4000);
+    expect(summary.youOwe[0]?.name).toBe('Ben');
+    expect(summary.youOwe[0]?.tripNames).toEqual(['Bangkok', 'Tokyo']);
+  });
+
+  it('flips the direction when the other trip is the larger debt', () => {
+    const summary = buildDebtSummary({
+      trips: [TRIP_A, TRIP_B],
+      balances: [
+        bal('trip-a', ME, -3000, { user_id: MY_ACCOUNT }),
+        bal('trip-a', BEN, 3000, { user_id: BEN_ACCOUNT }),
+        bal('trip-b', 'me-2', 7500, { user_id: MY_ACCOUNT, display_name: 'Me' }),
+        bal('trip-b', 'ben-2', -7500, { user_id: BEN_ACCOUNT, display_name: 'Ben' }),
+      ],
+      myMemberIds: new Set([ME, 'me-2']),
+    });
+
+    expect(summary.youOwe).toHaveLength(0);
+    expect(summary.owedToYou[0]?.amountCents).toBe(4500);
+  });
+
+  it('drops a person who cancels out exactly', () => {
+    const summary = buildDebtSummary({
+      trips: [TRIP_A, TRIP_B],
+      balances: [
+        bal('trip-a', ME, -5000, { user_id: MY_ACCOUNT }),
+        bal('trip-a', BEN, 5000, { user_id: BEN_ACCOUNT }),
+        bal('trip-b', 'me-2', 5000, { user_id: MY_ACCOUNT, display_name: 'Me' }),
+        bal('trip-b', 'ben-2', -5000, { user_id: BEN_ACCOUNT, display_name: 'Ben' }),
+      ],
+      myMemberIds: new Set([ME, 'me-2']),
+    });
+
+    expect(summary.owedToYou).toHaveLength(0);
+    expect(summary.youOwe).toHaveLength(0);
+  });
+
+  it('nets only within a currency, never across them', () => {
+    const summary = buildDebtSummary({
+      trips: [TRIP_A, TRIP_C],
+      balances: [
+        // SGD: I owe Ben 80.
+        bal('trip-a', ME, -8000, { user_id: MY_ACCOUNT }),
+        bal('trip-a', BEN, 8000, { user_id: BEN_ACCOUNT }),
+        // THB: Ben owes me 40. Different currency — must not cancel.
+        bal('trip-c', 'me-3', 4000, { user_id: MY_ACCOUNT, display_name: 'Me' }),
+        bal('trip-c', 'ben-3', -4000, { user_id: BEN_ACCOUNT, display_name: 'Ben' }),
+      ],
+      myMemberIds: new Set([ME, 'me-3']),
+    });
+
+    expect(summary.youOwe).toEqual([
+      expect.objectContaining({ currency: 'SGD', amountCents: 8000 }),
+    ]);
+    expect(summary.owedToYou).toEqual([
+      expect.objectContaining({ currency: 'THB', amountCents: 4000 }),
+    ]);
+  });
+
+  it('does not net across two account-less people who share a name', () => {
+    const summary = buildDebtSummary({
+      trips: [TRIP_A, TRIP_B],
+      balances: [
+        bal('trip-a', ME, -6000, { display_name: 'Me' }),
+        bal('trip-a', BEN, 6000, { display_name: 'Sam' }),
+        bal('trip-b', 'me-2', 6000, { display_name: 'Me' }),
+        bal('trip-b', 'sam-2', -6000, { display_name: 'Sam' }),
+      ],
+      myMemberIds: new Set([ME, 'me-2']),
+    });
+
+    // Two unrelated Sams: netting them to zero would erase two real debts.
+    expect(summary.youOwe).toHaveLength(1);
+    expect(summary.owedToYou).toHaveLength(1);
+  });
+
   it('never sums across currencies — one row per currency', () => {
     const summary = buildDebtSummary({
       trips: [TRIP_A, TRIP_C],

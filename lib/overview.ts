@@ -29,12 +29,19 @@ export type DebtSummary = {
 };
 
 /**
- * Amounts are aggregated per person PER CURRENCY, never across currencies.
+ * Amounts are NETTED per person per currency, and never across currencies.
  *
- * Two trips settling in SGD collapse into one line for that person; a third in
- * THB gets its own line. Summing across currencies would need a conversion, and
- * a converted total is not what anyone actually settles — the trip's base
- * currency is. Better two honest rows than one invented number.
+ * Netting: if you owe Sam 80 in one trip and Sam owes you 40 in another, that
+ * is one debt of 40, not two rows facing opposite directions. The two of you
+ * would settle it with a single payment, so that is the figure to show. A pair
+ * that cancels out exactly disappears from the summary rather than showing as
+ * a zero.
+ *
+ * Per currency: two trips settling in SGD collapse into one line for that
+ * person; a third in THB gets its own line. Netting across currencies would
+ * need a conversion, and a converted total is not what anyone actually
+ * settles — the trip's base currency is. Better two honest rows than one
+ * invented number.
  */
 export function buildDebtSummary(input: {
   trips: Pick<Trip, 'id' | 'name' | 'base_currency'>[];
@@ -51,8 +58,8 @@ export function buildDebtSummary(input: {
     else byTrip.set(balance.trip_id, [balance]);
   }
 
-  const owed = new Map<string, DebtRow>();
-  const owe = new Map<string, DebtRow>();
+  /** Keyed by person-and-currency. Positive: they owe you. Negative: you owe them. */
+  const totals = new Map<string, { row: Omit<DebtRow, 'amountCents'>; signedCents: number }>();
 
   for (const [tripId, rows] of byTrip) {
     const trip = tripsById.get(tripId);
@@ -87,28 +94,41 @@ export function buildDebtSummary(input: {
       const identity = counterparty.user_id ?? `${tripId}:${counterparty.member_id}`;
       const key = `${identity}|${trip.base_currency}`;
 
-      const target = theyOweMe ? owed : owe;
-      const existing = target.get(key);
+      // The sign is the direction, so opposite-facing debts across trips cancel
+      // instead of becoming two rows.
+      const signedCents = theyOweMe ? transfer.amount_cents : -transfer.amount_cents;
+      const existing = totals.get(key);
 
       if (existing) {
-        existing.amountCents += transfer.amount_cents;
-        if (!existing.tripNames.includes(trip.name)) existing.tripNames.push(trip.name);
+        existing.signedCents += signedCents;
+        if (!existing.row.tripNames.includes(trip.name)) existing.row.tripNames.push(trip.name);
       } else {
-        target.set(key, {
-          key,
-          name: counterparty.display_name,
-          currency: trip.base_currency,
-          amountCents: transfer.amount_cents,
-          tripNames: [trip.name],
+        totals.set(key, {
+          signedCents,
+          row: {
+            key,
+            name: counterparty.display_name,
+            currency: trip.base_currency,
+            tripNames: [trip.name],
+          },
         });
       }
     }
   }
 
+  const owedToYou: DebtRow[] = [];
+  const youOwe: DebtRow[] = [];
+
+  for (const { row, signedCents } of totals.values()) {
+    // Exactly square with this person in this currency: nothing to settle, so
+    // showing them at all would be noise.
+    if (signedCents === 0) continue;
+
+    const target = signedCents > 0 ? owedToYou : youOwe;
+    target.push({ ...row, amountCents: Math.abs(signedCents) });
+  }
+
   const byAmount = (a: DebtRow, b: DebtRow) => b.amountCents - a.amountCents;
 
-  return {
-    owedToYou: [...owed.values()].sort(byAmount),
-    youOwe: [...owe.values()].sort(byAmount),
-  };
+  return { owedToYou: owedToYou.sort(byAmount), youOwe: youOwe.sort(byAmount) };
 }

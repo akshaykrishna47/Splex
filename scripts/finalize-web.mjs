@@ -10,7 +10,7 @@
  * Idempotent: running it twice does not duplicate the tags.
  */
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DIST = process.argv[2] ?? 'dist';
@@ -75,7 +75,17 @@ const HEAD_TAGS = `${MARKER}
  * already serves index.html with a 200 for unmatched paths, which is the whole
  * job. If this ever moves to Cloudflare Pages, add a `_redirects` there with a
  * rule that excludes the fallback target rather than reinstating this one.
+ *
+ * It is actively DELETED rather than merely not written. Cloudflare restores
+ * `dist/` from a build cache between runs, and `expo export` only overwrites
+ * the files it generates — an old `_redirects` left in that cache survives into
+ * the new build and fails the deploy just the same. Not writing it is not
+ * enough; the build has to clean up after the version of itself that did.
  */
+if (existsSync(join(DIST, '_redirects'))) {
+  rmSync(join(DIST, '_redirects'));
+  console.log('finalize-web: removed a stale _redirects (see the note above).');
+}
 
 let html = readFileSync(INDEX, 'utf8');
 

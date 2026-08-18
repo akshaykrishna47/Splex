@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   Inter_400Regular,
   Inter_500Medium,
@@ -38,6 +38,35 @@ installThemeVars();
 
 export default function RootLayout() {
   const bootstrap = useSessionStore((s) => s.bootstrap);
+  const userId = useSessionStore((s) => s.session?.user.id ?? null);
+  const cachedFor = useRef<string | null>(null);
+
+  /**
+   * Drops the whole query cache whenever the signed-in user changes.
+   *
+   * Two bugs, one cause: the query keys are not scoped to a user, and the
+   * session arrives asynchronously after the first render.
+   *
+   * Row Level Security answers an unauthenticated read with an empty array
+   * rather than an error, so a trips fetch that happens before the session
+   * lands is cached as a perfectly valid `[]` under `['trips']`. `staleTime`
+   * is 30s, so signing in does not refetch it — the list stays empty until
+   * something forces a reload, which is exactly what it looked like.
+   *
+   * The second is worse and easy to miss: because the key is shared, signing
+   * out and in as somebody else would serve them the previous account's cached
+   * trips until the refetch resolved.
+   *
+   * `clear()` rather than `invalidateQueries()` — invalidation keeps showing
+   * stale data while it refetches, which is the leak. Clearing shows a loading
+   * state instead. The cost is re-fetching currencies and rates, which is two
+   * requests on a transition that happens once per sign-in.
+   */
+  useEffect(() => {
+    if (cachedFor.current === userId) return;
+    cachedFor.current = userId;
+    queryClient.clear();
+  }, [userId]);
 
   // Each weight is a separate font file — React Native does not synthesise bold.
   const [fontsLoaded] = useFonts({

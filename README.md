@@ -317,7 +317,7 @@ none of them fail loudly.
 | Database schema | A **new** migration file. Then `npm run bundle:sql`, update `lib/types.ts` by hand, `npx supabase db reset` to prove it applies from scratch, then `npx supabase db push --db-url …` to production. |
 | Edge function — `supabase/functions/` | `npx supabase functions deploy sync-fx-rates --project-ref <ref>`. **A git push does not deploy this.** |
 | Dependencies | Commit `package-lock.json`. Cloudflare installs from it with `npm ci`, which fails if it has drifted from `package.json`. |
-| Supabase URL or key | Three places: `.env.local` (dev), `.env.production.local` (local production build), and the Cloudflare Pages environment. |
+| Supabase URL or key | Three places: `.env.local` (dev), `.env.production.local` (local production build), and the Cloudflare Workers environment. |
 
 CI runs typecheck and the test suite on every push to `main`. Cloudflare deploys
 whether or not it passes, so treat a red run as "the deployed app is broken",
@@ -353,7 +353,8 @@ reach it through `lib/repo/`. Running the app still needs `.env.local`.
 
 ## Deploying
 
-Target: the hosted Supabase project for data, **Cloudflare Pages** for the app.
+Target: the hosted Supabase project for data, **Cloudflare Workers** for the
+app, live at `https://splex.akshaykrishna00a.workers.dev`.
 
 ### 1. Apply the schema
 
@@ -406,16 +407,31 @@ warning. Always confirm what actually shipped:
 grep -o 'https://[a-z0-9]*\.supabase\.co' dist/_expo/static/js/web/*.js | sort -u
 ```
 
-### 3. Cloudflare Pages
+### 3. Cloudflare Workers
 
 Build command `npm run build:web`, output directory `dist`. Set
-`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the Pages
+`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the Workers
 environment if building on Cloudflare rather than uploading a local `dist/`.
 
-`scripts/finalize-web.mjs` writes `dist/_redirects` on every build, so SPA
-routing survives a rebuild. Without it every route but `/` 404s on refresh —
-and only on refresh, which is the kind of bug that passes testing and breaks in
-front of someone else.
+**SPA routing comes from `wrangler.jsonc`, not from `_redirects`.** This is the
+trap: `scripts/finalize-web.mjs` writes `dist/_redirects` on every build, but
+that is a Cloudflare **Pages** convention and Workers ignores it entirely. The
+first deployment shipped without `not_found_handling` and every URL except `/`
+returned 404 — on refresh, on a shared link, and on the password-recovery link,
+which lands on `/reset-password`.
+
+```jsonc
+"assets": {
+  "directory": "./dist",
+  "not_found_handling": "single-page-application"
+}
+```
+
+The 200 that setting produces is the point. A 301 or 302 would rewrite the
+address bar, and the router would never see the path it was meant to handle.
+
+`_redirects` is still written, harmlessly, so the build stays correct if this
+ever moves to Pages.
 
 ### 4. Auth redirect URLs
 
@@ -423,8 +439,8 @@ Authentication → URL Configuration, or the Management API. Both fields matter:
 
 | Field | Value |
 | --- | --- |
-| Site URL | `https://splex.pages.dev` |
-| Redirect URLs | `https://splex.pages.dev`, `https://splex.pages.dev/**`, `http://localhost:8081`, `http://localhost:8081/**` |
+| Site URL | `https://splex.akshaykrishna00a.workers.dev` |
+| Redirect URLs | the origin, its `/**` form, and the same two for `http://localhost:8081` |
 
 **An empty allow-list does not produce an error.** Supabase silently discards
 the `emailRedirectTo` the app sends and falls back to Site URL — which defaults

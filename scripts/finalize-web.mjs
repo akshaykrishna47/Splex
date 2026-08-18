@@ -57,18 +57,23 @@ const HEAD_TAGS = `${MARKER}
 `;
 
 /**
- * Cloudflare Pages SPA routing.
+ * SPA routing, for Cloudflare **Pages**.
  *
  * Expo exports one index.html and does all routing client-side, so a request
  * straight to /trips or /about — a refresh, a shared link, a bookmark — asks
- * the host for a file that does not exist. Without this every route but `/`
- * 404s, and only on reload, which is exactly the kind of bug that survives
+ * the host for a file that does not exist. Without a fallback every route but
+ * `/` 404s, and only on reload, which is exactly the kind of bug that survives
  * testing and breaks in front of someone else.
  *
  * `200` rather than a redirect: the URL has to stay put so the router can read
- * it. The 404 line is second because Cloudflare takes the first match, and it
- * lets genuinely missing assets keep failing as assets instead of silently
- * returning the app shell.
+ * it.
+ *
+ * IMPORTANT: this app is deployed on Cloudflare **Workers**, which does not
+ * read `_redirects` at all — that is a Pages convention. Workers gets its
+ * fallback from `not_found_handling` in `wrangler.jsonc`, and the first
+ * deployment 404'd on every deep link precisely because this file looked like
+ * it had the problem covered. Kept anyway: it is correct, it costs nothing, and
+ * it is what makes the build right if this ever moves to Pages.
  */
 writeFileSync(
   join(DIST, '_redirects'),

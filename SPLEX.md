@@ -20,7 +20,8 @@ can ship from the same source later without a rewrite. No web-only APIs exist
 outside `scripts/finalize-web.mjs` and `public/sw.js`; every screen is built
 from React Native primitives.
 
-**Status:** working end to end against a local Supabase stack. Not deployed.
+**Status:** live at https://splex.akshaykrishna00a.workers.dev, against the hosted
+Supabase project. CI green on `main`.
 
 ---
 
@@ -39,7 +40,7 @@ from React Native primitives.
 | Icons | Phosphor, on `react-native-svg` | `^3.0.6` / `15.15.4` |
 | Fonts | Inter, Space Grotesk, Lobster | via `@expo-google-fonts/*` |
 | CI | GitHub Actions — typecheck + tests on push | — |
-| Hosting | Cloudflare Pages (static SPA) + hosted Supabase | — |
+| Hosting | Cloudflare Workers (static SPA) + hosted Supabase | — |
 
 ### Why each dependency is here
 
@@ -432,7 +433,7 @@ re-pin rules on edit.
 | FX | `sync-fx-rates` deployed; 163 live rates |
 | Auth | Site URL + redirect allow-list configured for the app origin and `localhost:8081` |
 | Repo | `akshaykrishna47/Splex`, CI green on `main` |
-| Web | Cloudflare Pages — **not connected yet**; `dist/` builds and is verified |
+| Web | Cloudflare Workers — **not connected yet**; `dist/` builds and is verified |
 
 Applying later migrations: `npm run bundle:sql`, then `supabase db push
 --db-url …`. Use `db push` rather than pasting the bundle — it records what it
@@ -443,7 +444,7 @@ ran, so subsequent migrations go up incrementally. Direct connections to
 
 ## Outstanding
 
-- **Cloudflare Pages is not connected.** Everything else is deployed. Connect
+- **Cloudflare Workers is not connected.** Everything else is deployed. Connect
   the repo with build `npm run build:web`, output `dist`, and set the two
   `EXPO_PUBLIC_*` variables in the Pages environment.
 - **The FX cron cannot authenticate.** `sync-fx-rates` is deployed and works on

@@ -1,0 +1,22 @@
+{
+  // Cloudflare Workers static assets.
+  //
+  // The app is deployed on Workers, not Pages. That distinction matters more
+  // than it sounds: `dist/_redirects`, which `scripts/finalize-web.mjs` writes,
+  // is a *Pages* convention. Workers does not read it, so without the setting
+  // below every URL except `/` returns 404 — on refresh, on a shared link, and
+  // on the password-recovery link, which lands on `/reset-password`.
+  //
+  // `single-page-application` serves index.html with **200** for unmatched
+  // paths. The 200 is the point: a 301 or 302 would rewrite the address bar and
+  // the router would never see the path it was supposed to handle.
+  //
+  // Kept in the repo rather than set in the dashboard so a redeploy cannot
+  // quietly lose it.
+  "name": "splex",
+  "compatibility_date": "2026-08-18",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
